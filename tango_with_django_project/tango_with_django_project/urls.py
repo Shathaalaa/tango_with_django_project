@@ -17,9 +17,15 @@ from django.contrib import admin
 from django.urls import path
 from django.urls import include
 from rango import views
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('rango/', include('rango.urls')),
     path('', views.index, name='index')
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) #static is a helper function, it creates a URL pattern that maps
+# media URL --> media root on disk, we didn't need that for static files because static files are part from the project so django knows
+# how to get to them and it automatically creates that map, but media is usually uploaded by the users so it does'nt know how to get to them.
+
+# the plus sign is for concatanating the two arrays.
