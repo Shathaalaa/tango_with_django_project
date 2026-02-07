@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Category</title>
+</head>
+<body>
+    <div>
+        {%if category%}
+            <h2>{{category.name}}</h2>
+            {%if pages%}
+                <ul>
+                    {%for page in pages%}
+                        <li><a href="{{ page.url }}">{{ page.title }}</a></li>
+                    {%endfor%}
+                </ul>
+            {%else%}
+                <strong>THERE ARE NO PAGES IN THIS CATEGORY.</strong>
+            {%endif%}
+        {%else%}
+            <Strong>NO SUCH CATEGORY.</Strong>
+        {%endif%}
+    </div>
+</body>
+</html>
