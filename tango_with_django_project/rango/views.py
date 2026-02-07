@@ -15,6 +15,9 @@ def index(request):
     context_dict['pages'] = pages
     return render(request, 'rango/index.html', context=context_dict)
 
+def about(request):
+    return  render(request, 'rango/about.html')
+
 def show_category(request, category_name_slug):
     context_dict ={}
     try:
