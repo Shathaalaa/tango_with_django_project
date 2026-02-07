@@ -1,16 +1,16 @@
 # 
 # Tango with Django 2 Progress Tests
 # By Leif Azzopardi and David Maxwell
-# With assistance from Enzo Roiz (https://github.com/enzoroiz)
+# With assistance from Enzo Roiz (https://github.com/enzoroiz) and Gerardo A-C (https://github.com/gerac83)
 # 
-# Chapter 5 -- Models and Databases
-# Last updated: October 3rd, 2019
+# Chapter 7 -- Forms
+# Last updated: January 7th, 2020
 # Revising Author: David Maxwell
 # 
 
 #
 # In order to run these tests, copy this module to your tango_with_django_project/rango/ directory.
-# Once this is complete, run $ python manage.py test rango.tests_chapter5
+# Once this is complete, run $ python manage.py test rango.tests_chapter7
 # 
 # The tests will then be run, and the output displayed -- do you pass them all?
 # 
@@ -18,248 +18,218 @@
 #
 
 import os
-import warnings
-import importlib
+import inspect
 from rango.models import Category, Page
-from django.urls import reverse
+from populate_rango import populate
 from django.test import TestCase
-from django.conf import settings
-from django.contrib.auth.models import User
+from django.urls import reverse, resolve
+from django.forms import fields as django_fields
 
 FAILURE_HEADER = f"{os.linesep}{os.linesep}{os.linesep}================{os.linesep}TwD TEST FAILURE =({os.linesep}================{os.linesep}"
 FAILURE_FOOTER = f"{os.linesep}"
 
 
-class Chapter5DatabaseConfigurationTests(TestCase):
+class Chapter7FormClassTests(TestCase):
     """
-    Is your database configured as the book states?
-    These tests should pass if you haven't tinkered with the database configuration.
-    N.B. Some of the configuration values we could check are overridden by the testing framework -- so we leave them.
+    Do the Form classes exist, and do they contain the correct instance variables?
     """
-    def setUp(self):
-        pass
-    
-    def does_gitignore_include_database(self, path):
+    def test_module_exists(self):
         """
-        Takes the path to a .gitignore file, and checks to see whether the db.sqlite3 database is present in that file.
+        Tests that the forms.py module exists in the expected location.
         """
-        f = open(path, 'r')
-        
-        for line in f:
-            line = line.strip()
-            
-            if line.startswith('db.sqlite3'):
-                return True
-        
-        f.close()
-        return False
-    
-    def test_databases_variable_exists(self):
-        """
-        Does the DATABASES settings variable exist, and does it have a default configuration?
-        """
-        self.assertTrue(settings.DATABASES, f"{FAILURE_HEADER}Your project's settings module does not have a DATABASES variable, which is required. Check the start of Chapter 5.{FAILURE_FOOTER}")
-        self.assertTrue('default' in settings.DATABASES, f"{FAILURE_HEADER}You do not have a 'default' database configuration in your project's DATABASES configuration variable. Check the start of Chapter 5.{FAILURE_FOOTER}")
-    
-    def test_gitignore_for_database(self):
-        """
-        If you are using a Git repository and have set up a .gitignore, checks to see whether the database is present in that file.
-        """
-        git_base_dir = os.popen('git rev-parse --show-toplevel').read().strip()
-        
-        if git_base_dir.startswith('fatal'):
-            warnings.warn("You don't appear to be using a Git repository for your codebase. Although not strictly required, it's *highly recommended*. Skipping this test.")
-        else:
-            gitignore_path = os.path.join(git_base_dir, '.gitignore')
-            
-            if os.path.exists(gitignore_path):
-                self.assertTrue(self.does_gitignore_include_database(gitignore_path), f"{FAILURE_HEADER}Your .gitignore file does not include 'db.sqlite3' -- you should exclude the database binary file from all commits to your Git repository.{FAILURE_FOOTER}")
-            else:
-                warnings.warn("You don't appear to have a .gitignore file in place in your repository. We ask that you consider this! Read the Don't git push your Database paragraph in Chapter 5.")
+        project_path = os.getcwd()
+        rango_app_path = os.path.join(project_path, 'rango')
+        forms_module_path = os.path.join(rango_app_path, 'forms.py')
 
+        self.assertTrue(os.path.exists(forms_module_path), f"{FAILURE_HEADER}We couldn't find Rango's new forms.py module. This is required to be created at the top of Section 7.2. This module should be storing your two form classes.{FAILURE_FOOTER}")
+    
+    def test_category_form_class(self):
+        """
+        Does the CategoryForm implementation exist, and does it contain the correct instance variables?
+        """
+        # Check that we can import CategoryForm.
+        import rango.forms
+        self.assertTrue('CategoryForm' in dir(rango.forms), f"{FAILURE_HEADER}The class CategoryForm could not be found in Rango's forms.py module. Check you have created this class in the correct location, and try again.{FAILURE_FOOTER}")
 
-class Chapter5ModelTests(TestCase):
-    """
-    Are the models set up correctly, and do all the required attributes (post exercises) exist?
-    """
-    def setUp(self):
-        category_py = Category.objects.get_or_create(name='Python', views=123, likes=55)
-        Category.objects.get_or_create(name='Django', views=187, likes=90)
-        
-        Page.objects.get_or_create(category=category_py[0],
-                                   title='Tango with Django',
-                                   url='https://www.tangowithdjango.com',
-                                   views=156)
-    
-    def test_category_model(self):
-        """
-        Runs a series of tests on the Category model.
-        Do the correct attributes exist?
-        """
-        category_py = Category.objects.get(name='Python')
-        self.assertEqual(category_py.views, 123, f"{FAILURE_HEADER}Tests on the Category model failed. Check you have all required attributes (including those specified in the exercises!), and try again.{FAILURE_FOOTER}")
-        self.assertEqual(category_py.likes, 55, f"{FAILURE_HEADER}Tests on the Category model failed. Check you have all required attributes (including those specified in the exercises!), and try again.{FAILURE_FOOTER}")
-        
-        category_dj = Category.objects.get(name='Django')
-        self.assertEqual(category_dj.views, 187, f"{FAILURE_HEADER}Tests on the Category model failed. Check you have all required attributes (including those specified in the exercises!), and try again.{FAILURE_FOOTER}")
-        self.assertEqual(category_dj.likes, 90, f"{FAILURE_HEADER}Tests on the Category model failed. Check you have all required attributes (including those specified in the exercises!), and try again.{FAILURE_FOOTER}")
-    
-    def test_page_model(self):
-        """
-        Runs some tests on the Page model.
-        Do the correct attributes exist?
-        """
-        category_py = Category.objects.get(name='Python')
-        page = Page.objects.get(title='Tango with Django')
-        self.assertEqual(page.url, 'https://www.tangowithdjango.com', f"{FAILURE_HEADER}Tests on the Page model failed. Check you have all required attributes (including those specified in the exercises!), and try again.{FAILURE_FOOTER}")
-        self.assertEqual(page.views, 156, f"{FAILURE_HEADER}Tests on the Page model failed. Check you have all required attributes (including those specified in the exercises!), and try again.{FAILURE_FOOTER}")
-        self.assertEqual(page.title, 'Tango with Django', f"{FAILURE_HEADER}Tests on the Page model failed. Check you have all required attributes (including those specified in the exercises!), and try again.{FAILURE_FOOTER}")
-        self.assertEqual(page.category, category_py, f"{FAILURE_HEADER}Tests on the Page model failed. Check you have all required attributes (including those specified in the exercises!), and try again.{FAILURE_FOOTER}")
-    
-    def test_str_method(self):
-        """
-        Tests to see if the correct __str__() method has been implemented for each model.
-        """
-        category_py = Category.objects.get(name='Python')
-        page = Page.objects.get(title='Tango with Django')
-        
-        self.assertEqual(str(category_py), 'Python', f"{FAILURE_HEADER}The __str__() method in the Category class has not been implemented according to the specification given in the book.{FAILURE_FOOTER}")
-        self.assertEqual(str(page), 'Tango with Django', f"{FAILURE_HEADER}The __str__() method in the Page class has not been implemented according to the specification given in the book.{FAILURE_FOOTER}")
+        from rango.forms import CategoryForm
+        category_form = CategoryForm()
 
+        # Do you correctly link Category to CategoryForm?
+        self.assertEqual(type(category_form.__dict__['instance']), Category, f"{FAILURE_HEADER}The CategoryForm does not link to the Category model. Have a look in the CategoryForm's nested Meta class for the model attribute.{FAILURE_FOOTER}")
 
-class Chapter5AdminInterfaceTests(TestCase):
-    """
-    A series of tests that examines the authentication functionality (for superuser creation and logging in), and admin interface changes.
-    Have all the admin interface tweaks been applied, and have the two models been added to the admin app?
-    """
-    def setUp(self):
-        """
-        Create a superuser account for use in testing.
-        Logs the superuser in, too!
-        """
-        User.objects.create_superuser('testAdmin', 'email@email.com', 'adminPassword123')
-        self.client.login(username='testAdmin', password='adminPassword123')
-        
-        category = Category.objects.get_or_create(name='TestCategory')[0]
-        Page.objects.get_or_create(title='TestPage1', url='https://www.google.com', category=category)
-    
-    def test_admin_interface_accessible(self):
-        response = self.client.get('/admin/')
-        self.assertEqual(response.status_code, 200, f"{FAILURE_HEADER}The admin interface is not accessible. Check that you didn't delete the 'admin/' URL pattern in your project's urls.py module.{FAILURE_FOOTER}")
-    
-    def test_models_present(self):
-        """
-        Checks whether the two models are present within the admin interface homepage -- and whether Rango is listed there at all.
-        """
-        response = self.client.get('/admin/')
-        response_body = response.content.decode()
-        
-        # Is the Rango app present in the admin interface's homepage?
-        self.assertTrue('Models in the Rango application' in response_body, f"{FAILURE_HEADER}The Rango app wasn't listed on the admin interface's homepage. You haven't added the models to the admin interface.{FAILURE_FOOTER}")
-        
-        # Check each model is present.
-        self.assertTrue('Categories' in response_body, f"{FAILURE_HEADER}The Category model was not found in the admin interface. If you did add the model to admin.py, did you add the correct plural spelling (Categories)?{FAILURE_FOOTER}")
-        self.assertTrue('Pages' in response_body, f"{FAILURE_HEADER}The Page model was not found in the admin interface. If you did add the model to admin.py, did you add the correct plural spelling (Pages)?{FAILURE_FOOTER}")
-    
-    def test_page_display_changes(self):
-        """
-        Checks to see whether the Page model has had the required changes applied for presentation in the admin interface.
-        """
-        response = self.client.get('/admin/rango/page/')
-        response_body = response.content.decode()
-        
-        # Headers -- are they all present?
-        self.assertTrue('<div class="text"><a href="?o=1">Title</a></div>' in response_body, f"{FAILURE_HEADER}The 'Title' column could not be found in the admin interface for the Page model -- if it is present, is it in the correct order?{FAILURE_FOOTER}")
-        self.assertTrue('<div class="text"><a href="?o=2">Category</a></div>' in response_body, f"{FAILURE_HEADER}The 'Category' column could not be found in the admin interface for the Page model -- if it is present, is it in the correct order?{FAILURE_FOOTER}")
-        self.assertTrue('<div class="text"><a href="?o=3">Url</a></div>' in response_body, f"{FAILURE_HEADER}The 'Url' (stylised that way!) column could not be found in the admin interface for the Page model -- if it is present, is it in the correct order?{FAILURE_FOOTER}")
-        
-        # Is the TestPage1 page present, and in order?
-        expected_str = '<tr class="row1"><td class="action-checkbox"><input type="checkbox" name="_selected_action" value="1" class="action-select"></td><th class="field-title"><a href="/admin/rango/page/1/change/">TestPage1</a></th><td class="field-category nowrap">TestCategory</td><td class="field-url">https://www.google.com</td></tr>'
-        self.assertTrue(expected_str in response_body, f"{FAILURE_HEADER}We couldn't find the correct output in the Page view within the admin interface for page listings. Did you complete the exercises, adding extra columns to the admin view for this model? Are the columns in the correct order?{FAILURE_FOOTER}")
+        # Now check that all the required fields are present, and of the correct form field type.
+        fields = category_form.fields
 
+        expected_fields = {
+            'name': django_fields.CharField,
+            'views': django_fields.IntegerField,
+            'likes': django_fields.IntegerField,
+            'slug': django_fields.CharField,
+        }
 
-class Chapter5PopulationScriptTests(TestCase):
+        for expected_field_name in expected_fields:
+            expected_field = expected_fields[expected_field_name]
+
+            self.assertTrue(expected_field_name in fields.keys(), f"{FAILURE_HEADER}The field '{expected_field_name}' was not found in your CategoryForm implementation. Check you have all required fields, and try again.{FAILURE_FOOTER}")
+            self.assertEqual(expected_field, type(fields[expected_field_name]), f"{FAILURE_HEADER}The field '{expected_field_name}' in CategoryForm was not of the expected type '{type(fields[expected_field_name])}'.{FAILURE_FOOTER}")
+
+class Chapter7CategoryFormAncillaryTests(TestCase):
     """
-    Tests whether the population script puts the expected data into a test database.
-    All values that are explicitly mentioned in the book are tested.
-    Expects that the population script has the populate() function, as per the book!
+    Performs checks to see if all the additional requirements in Chapter 7 for adding a CategoryForm have been implemented correctly.
+    Checks URL mappings and server output.
     """
-    def setUp(self):
+    def test_add_category_url_mapping(self):
         """
-        Imports and runs the population script, calling the populate() method.
+        Tests whether the URL mapping for adding a category is resolvable.
         """
         try:
-            import populate_rango
-        except ImportError:
-            raise ImportError(f"{FAILURE_HEADER}The Chapter 5 tests could not import the populate_rango. Check it's in the right location (the first tango_with_django_project directory).{FAILURE_FOOTER}")
+            resolved_name = resolve('/rango/add_category/').view_name
+        except:
+            resolved_name = ''
         
-        if 'populate' not in dir(populate_rango):
-            raise NameError(f"{FAILURE_HEADER}The populate() function does not exist in the populate_rango module. This is required.{FAILURE_FOOTER}")
-        
-        # Call the population script -- any exceptions raised here do not have fancy error messages to help readers.
-        populate_rango.populate()
+        self.assertEqual(resolved_name, 'rango:add_category', f"{FAILURE_HEADER}The lookup of URL '/rango/add_category/' didn't return a mapping name of 'rango:add_category'. Check you have the correct URL mapping for adding a category, and try again.{FAILURE_FOOTER}")
     
-    def test_categories(self):
+    def test_index_link_added(self):
         """
-        There should be three categories from populate_rango -- Python, Django and Other Frameworks.
+        Checks whether a link has been added as required on the index page, taking a user to the add category page.
         """
-        categories = Category.objects.filter()
-        categories_len = len(categories)
-        categories_strs = map(str, categories)
-        
-        self.assertEqual(categories_len, 3, f"{FAILURE_HEADER}Expecting 3 categories to be created from the populate_rango module; found {categories_len}.{FAILURE_FOOTER}")
-        self.assertTrue('Python' in categories_strs, f"{FAILURE_HEADER}The category 'Python' was expected but not created by populate_rango.{FAILURE_FOOTER}")
-        self.assertTrue('Django' in categories_strs, f"{FAILURE_HEADER}The category 'Django' was expected but not created by populate_rango.{FAILURE_FOOTER}")
-        self.assertTrue('Other Frameworks' in categories_strs, f"{FAILURE_HEADER}The category 'Other Frameworks' was expected but not created by populate_rango.{FAILURE_FOOTER}")
+        response = self.client.get(reverse('rango:index'))
+        content = response.content.decode()
+
+        self.assertTrue('<a href="/rango/add_category/">Add a New Category</a><br />' in content)
+
+    def test_add_category_template(self):
+        """
+        Checks whether a template was used for the add_category() view.
+        """
+        response = self.client.get(reverse('rango:add_category'))
+        self.assertTemplateUsed(response, 'rango/add_category.html', f"{FAILURE_HEADER}The add_category.html template is not used for the add_category() view. The specification requires this.{FAILURE_FOOTER}")
+
+    def test_add_category_form_response(self):
+        """
+        Checks the response from the initial add category response (i.e. check the page/form is correct).
+        """
+        response = self.client.get(reverse('rango:add_category'))
+        context = response.context
+        content = response.content.decode()
+
+        self.assertTrue('form' in context)
+
+        self.assertTrue('<h1>Add a Category</h1>' in content, f"{FAILURE_HEADER}Couldn't find 'Add a Category' header in the add_category() response. Check the template add_category.html.{FAILURE_FOOTER}")
+        self.assertTrue('name="name"' in content, f"{FAILURE_HEADER}We couldn't find the form field 'name' in the rendered add_category() response. Check that your form is being created correctly.{FAILURE_FOOTER}")
+        self.assertTrue('<input type="submit" name="submit" value="Create Category" />' in content, f"{FAILURE_HEADER}Couldn't find the button for 'Create Category' in the add_category() response. Check the template add_category.html.{FAILURE_FOOTER}")
+        self.assertTrue('action="/rango/add_category/"' in content, f"{FAILURE_HEADER}Couldn't find the correct action URL for the form in add_category.html. Check that the correct URL is provided!{FAILURE_FOOTER}")
     
-    def test_pages(self):
+    def test_add_category_functionality(self):
         """
-        Tests to check whether each page for the three different categories exists in the database.
-        Calls the helper check_category_pages() method for this.
+        Adds a category using the form, submits the request, and checks that the new category then exists.
         """
-        details = {'Python':
-                       ['Official Python Tutorial', 'How to Think like a Computer Scientist', 'Learn Python in 10 Minutes'],
-                   'Django':
-                       ['Official Django Tutorial', 'Django Rocks', 'How to Tango with Django'],
-                   'Other Frameworks':
-                       ['Bottle', 'Flask']}
+        self.client.post(reverse('rango:add_category'),
+                         {'name': 'Erlang', 'views': 0, 'likes': 0})
         
-        for category in details:
-            page_titles = details[category]
-            self.check_category_pages(category, page_titles)
+        categories = Category.objects.filter(name='Erlang')
+        self.assertEqual(len(categories), 1, f"{FAILURE_HEADER}When adding a new category, it does not appear in the list of categories after being created. Check your add_category() view as the start of a debugging point.{FAILURE_FOOTER}")
     
-    def test_counts(self):
+    def test_category_exists(self):
         """
-        Tests whether each category's likes and views values are the values that are stated in the book.
-        Pukes when a value doesn't match.
+        Attempts to add a category that already exists.
         """
-        details = {'Python': {'views': 128, 'likes': 64},
-                   'Django': {'views': 64, 'likes': 32},
-                   'Other Frameworks': {'views': 32, 'likes': 16}}
+        populate()
+
+        response = self.client.post(reverse('rango:add_category'),
+                                            {'name': 'Python', 'views': 0, 'likes': 0})
         
-        for category in details:
-            values = details[category]
-            category = Category.objects.get(name=category)
-            self.assertEqual(category.views, values['views'], f"{FAILURE_HEADER}The number of views for the '{category}' category is incorrect (got {category.views}, expected {values['views']}, generated from populate_rango).{FAILURE_FOOTER}")
-            self.assertEqual(category.likes, values['likes'], f"{FAILURE_HEADER}The number of likes for the '{category}' category is incorrect (got {category.likes}, expected {values['likes']}, generated from populate_rango).{FAILURE_FOOTER}")
+        self.assertTrue('Category with this Name already exists.' in response.content.decode(), f"{FAILURE_HEADER}When attempting to add a category that already exists, we didn't get the error message we were expecting. Please check your add_category() view and add_category.html template.{FAILURE_FOOTER}")
+
+class Chapter7PageFormClassTests(TestCase):
+    """
+    Checks whether the PageForm class has been implemented correctly.
+    """
+    def test_page_form_class(self):
+        """
+        Does the PageForm implementation exist, and does it contain the correct instance variables?
+        """
+        # Check that we can import PageForm.
+        import rango.forms
+        self.assertTrue('PageForm' in dir(rango.forms), f"{FAILURE_HEADER}The class PageForm could not be found in Rango's forms.py module. Check you have created this class in the correct location, and try again.{FAILURE_FOOTER}")
+
+        from rango.forms import PageForm
+        page_form = PageForm()
+
+        # Do you correctly link Page to PageForm?
+        self.assertEqual(type(page_form.__dict__['instance']), Page, f"{FAILURE_HEADER}The PageForm does not link to the Page model. Have a look in the PageForm's nested Meta class for the model attribute.{FAILURE_FOOTER}")
+
+        # Now check that all the required fields are present, and of the correct form field type.
+        fields = page_form.fields
+
+        expected_fields = {
+            'title': django_fields.CharField,
+            'url': django_fields.URLField,
+            'views': django_fields.IntegerField,
+        }
+
+        for expected_field_name in expected_fields:
+            expected_field = expected_fields[expected_field_name]
+
+            self.assertTrue(expected_field_name in fields.keys(), f"{FAILURE_HEADER}The field '{expected_field_name}' was not found in your PageForm implementation. Check you have all required fields, and try again.{FAILURE_FOOTER}")
+            self.assertEqual(expected_field, type(fields[expected_field_name]), f"{FAILURE_HEADER}The field '{expected_field_name}' in PageForm was not of the expected type '{type(fields[expected_field_name])}'.{FAILURE_FOOTER}")
     
-    def check_category_pages(self, category, page_titles):
+class Chapter7PageFormAncillaryTests(TestCase):
+    """
+    Performs a series of tests to check the response of the server under different conditions when adding pages.
+    """
+    def test_add_page_url_mapping(self):
         """
-        Performs a number of tests on the database regarding pages for a given category.
-        Do all the included pages in the population script exist?
-        The expected page list is passed as page_titles. The name of the category is passed as category.
+        Tests whether the URL mapping for adding a page is resolvable.
         """
-        category = Category.objects.get(name=category)
-        pages = Page.objects.filter(category=category)
-        pages_len = len(pages)
-        page_titles_len = len(page_titles)
+        try:
+            resolved_url = reverse('rango:add_page', kwargs={'category_name_slug': 'python'})
+        except:
+            resolved_url = ''
         
-        self.assertEqual(pages_len, len(page_titles), f"{FAILURE_HEADER}Expected {page_titles_len} pages in the Python category produced by populate_rango; found {pages_len}.{FAILURE_FOOTER}")
-        
-        for title in page_titles:
-            try:
-                page = Page.objects.get(title=title)
-            except Page.DoesNotExist:
-                raise ValueError(f"{FAILURE_HEADER}The page '{title}' belonging to category '{category}' was not found in the database produced by populate_rango.{FAILURE_FOOTER}")
-            
-            self.assertEqual(page.category, category)
+        self.assertEqual(resolved_url, '/rango/category/python/add_page/', f"{FAILURE_HEADER}The lookup of URL name 'rango:add_page' didn't return a URL matching '/rango/category/python/add_page/', when using category 'python'. Check you have the correct mappings and URL parameters, and try again.{FAILURE_FOOTER}")
+    
+    def test_add_page_template(self):
+        """
+        Checks whether a template was used for the add_page() view.
+        """
+        populate()
+        response = self.client.get(reverse('rango:add_page', kwargs={'category_name_slug': 'python'}))
+        self.assertTemplateUsed(response, 'rango/add_page.html', f"{FAILURE_HEADER}The add_page.html template is not used for the add_page() view. The specification requires this.{FAILURE_FOOTER}")
+    
+    def test_add_page_form_response(self):
+        """
+        Checks whether the template rendering add_page() contains a form, and whether it points to the add_page view.
+        """
+        populate()
+        response = self.client.get(reverse('rango:add_page', kwargs={'category_name_slug': 'django'}))
+        context = response.context
+        content = response.content.decode()
+
+        self.assertTrue('<form' in content, f"{FAILURE_HEADER}We couldn't find a <form> element in the response for adding a page.{FAILURE_FOOTER}")
+        self.assertTrue('action="/rango/category/django/add_page/"' in content, f"{FAILURE_HEADER}We couldn't find the correct action URL for adding a page in your add_page.html template. We expected to see 'action=\"/rango/django/add_page/\"' when adding a page to the 'python' category.{FAILURE_FOOTER}")
+    
+    def test_add_page_bad_category(self):
+        """
+        Tests whether the response for adding a page when specifying a non-existent category is per the specification.
+        """
+        response = self.client.get(reverse('rango:add_page', kwargs={'category_name_slug': 'non-existent'}))
+
+        self.assertEquals(response.status_code, 302, f"{FAILURE_HEADER}When attempting to add a new page to a category that doesn't exist, we weren't redirected. We were expecting a redirect -- check you add_page() view.{FAILURE_FOOTER}")
+        self.assertEquals(response.url, '/rango/', f"{FAILURE_HEADER}When attempting to add a new page to a category that doesn't exist, we were not redirected to the Rango homepage. Check your add_page() view, and try again.{FAILURE_FOOTER}")
+
+    def test_add_page_functionality(self):
+        """
+        Given a category and a new page, tests whether the functionality implemented works as expected.
+        """
+        populate()
+
+        response = self.client.post(reverse('rango:add_page', kwargs={'category_name_slug': 'python'}),
+                                            {'title': 'New webpage', 'url': 'www.google.com', 'views': 0})
+
+        python_pages = Page.objects.filter(title='New webpage')
+        self.assertEqual(len(python_pages), 1, f"{FAILURE_HEADER}When adding a new page to a category with the add_page form, the new Page object that we were expecting wasn't created. Check your add_page() view for mistakes, and try again. You need to call .save() on the page you create!{FAILURE_FOOTER}")
+
+        page = python_pages[0]
+        self.assertEqual(page.url, 'http://www.google.com', f"{FAILURE_HEADER}We created a new page with a URL of 'www.google.com'. The saved object is expected to have a URL of 'http://www.google.com'. Is your clean() method in PageForm working correctly?{FAILURE_FOOTER}")
+        self.assertEqual(page.title, 'New webpage', f"{FAILURE_HEADER}The new page we created didn't have the title we specified in the add_page form. Are you missing something in your PageForm implementation?{FAILURE_FOOTER}")
