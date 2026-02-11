@@ -2,9 +2,10 @@ from django.shortcuts import render
 from django.http import HttpResponse
 from rango.models import Category
 from rango.models import Page
-from rango.forms import CategoryForm, PageForm
+from rango.forms import CategoryForm, PageForm, UserForm, UserProfileForm
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.contrib.auth.models import User
 
 def index(request):
     categories = Category.objects.order_by('-likes')[:5]
@@ -68,3 +69,41 @@ def add_page(request, category_name_slug):
         else:
             print(form.errors)
     return render(request, 'rango/add_page.html', {'form': form, 'category':category})
+
+def register(request):
+    registered = False
+    if request.method == 'POST':
+        user_form = UserForm(request.POST) # creates a form object and fills it with the data entered by the user
+        profile_form = UserProfileForm(request.POST)
+
+        if user_form.is_valid() and profile_form.is_valid():
+            user = user_form.save() #user is a new form object, save method saves the form object into the database and the object
+            #saved is now stored in the user object. we store it in another object to be able to change the password later.
+
+            user.set_password(user.password) #hashes the plain password
+            user.save() #saves the object again.
+
+            profile = profile_form.save(commit=False)
+            profile.user = user
+
+            # Q: why do we have seperated models and forms for user and userProfile? 
+            # A: because we already have a predefined user model in django that handles passwords and usernames
+            # and we need another one to handle other information.
+
+            if 'picture' in request.FILES:
+                profile.picture = request.FILES['picture'] # if the user provided a picture replace the existing one with the new one.
+            
+            profile.save()
+            registered = True
+
+        else:
+            print(user_form.errors, profile_form.errors)
+    else:
+        user_form = UserForm()
+        profile_form = UserProfileForm()
+
+    return render(request,
+                    'rango/register.html',
+                    context = { 'user_form' : user_form,
+                                'profile_form' : profile_form,
+                                'registered' : registered})
